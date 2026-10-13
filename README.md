@@ -61,53 +61,60 @@ Data comes from [Databento](https://databento.com/) under the course's CME licen
 
 ### Getting Started
 
-> Aspirational until the Tech leader's project structure is merged.
-
-**Requirements:** Python 3.11+ (TODO: confirm), a Databento API key.
+**Requirements:** Python 3.12, git, a Databento API key.
 
 ```bash
-git clone https://github.com/<tech-leader>/finm37000-project.git
+git clone https://github.com/ryotahidaka/finm37000-project.git
 cd finm37000-project
 
-python -m venv .venv
+python3.12 -m venv .venv
 source .venv/bin/activate
-pip install -r requirements.txt   # TODO: or `pip install -e .` once packaged
+pip install -r requirements.txt   # pinned versions; also installs src/gcsi in editable mode
 
-export DATABENTO_API_KEY="your-key-here"
+cp .env.example .env              # then paste your key into .env (git-ignored)
+pytest                            # import smoke test; should pass on a fresh clone
 ```
+
+The key is read from the `DATABENTO_API_KEY` environment variable: export it as above, or put it in `.env` (loading `.env` with `python-dotenv` is part of Issue #4). The course helper `finm37000.db_env_util.get_databento_api_key()` reads `~/.databento_api_key` instead, if you already set that up for class.
+
+`requirements.txt` pins every package, including the course `finm37000` package at a fixed commit. Direct dependencies are declared in `pyproject.toml`. Use `pip install -e ".[dev]"` instead if you only want the latest compatible versions.
 
 ### Running the project
 
 ```bash
 # 1. Fetch and cache data
-python -m <package>.data --start YYYY-MM-DD --end YYYY-MM-DD   # TODO
+python -m gcsi.data --start YYYY-MM-DD --end YYYY-MM-DD   # TODO
 
 # 2. Run the analysis / strategy
-python -m <package>.run                                        # TODO
+python -m gcsi.run                                        # TODO
 
-# 3. Results are written to results/
+# 3. Results are written to output/
 ```
 
 ### Running the tests
 
 ```bash
-pytest
+pytest            # skips tests marked `db` (they need Databento access)
+pytest -m db      # run only the Databento tests
 ```
 
-### Planned Repository Layout
+### Repository Layout
 
 ```
 finm37000-project/
 ├── README.md
-├── requirements.txt        # or pyproject.toml
-├── src/<package>/          # reusable code (data loading, features, analysis)
+├── pyproject.toml          # package metadata + direct dependencies
+├── requirements.txt        # pinned full environment
+├── .env.example            # copy to .env and add your Databento key
+├── docs/DESIGN.md          # pipeline, components, design decisions
+├── src/gcsi/               # pipeline code: data, rolls, cointegration, ou, signals, backtest, metrics
 ├── notebooks/              # exploration and presentation only
 ├── tests/
 ├── data/                   # cached Databento data (git-ignored)
-└── results/                # generated outputs
+└── output/                 # generated tables and figures (git-ignored)
 ```
 
-This is a plan; the Tech leader may adjust it when initializing the repo.
+See [docs/DESIGN.md](docs/DESIGN.md) for how the components fit together.
 
 ### Roadmap
 
