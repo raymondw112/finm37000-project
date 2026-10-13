@@ -63,16 +63,17 @@ We reuse the professor's `finm37000` package for the data and roll plumbing rath
 
 | Issue | Component | Produces |
 |---|---|---|
-| Structure + env | repo root | installable environment |
-| Databento ingestion | `data/` | cached GC/SI frames |
-| Continuous + roll | `data/` | ratio-adjusted + real-price series |
-| EDA | notebook | tradability assessment |
-| Cointegration + hedge ratio | `pairs/` | spread definition |
-| OU + half-life | `signals/` | reversion parameters |
-| Signal generation | `signals/` | dated positions |
-| Backtest | `backtest/` | equity curve with costs |
-| Evaluation | `backtest/` + `output/` | metrics + figures |
-| Copula (stretch) | `signals/` | benchmark comparison |
+| #3 Structure + env | repo root | installable environment |
+| #18 Contract specs | `contracts.py` | multipliers, ticks, FND / last-trade calendar |
+| #4 Databento ingestion | `data.py` | cached GC/SI frames |
+| #5 Continuous + roll | `rolls.py` | ratio-adjusted + real-price series |
+| #6 EDA | notebook | tradability assessment |
+| #7 Cointegration + hedge ratio | `cointegration.py` | spread definition |
+| #8 OU + half-life | `ou.py` | reversion parameters |
+| #9 Signal generation | `signals.py` | dated positions |
+| #10 Backtest | `backtest.py` | equity curve with costs |
+| #11 Evaluation | `metrics.py` + `output/` | metrics + figures |
+| #12 Copula (stretch) | `signals.py` | benchmark comparison |
 
 ## 6. Central risk (state it up front)
 

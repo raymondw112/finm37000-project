@@ -1,4 +1,4 @@
-"""Databento ingestion for GC and SI futures (Issue 2).
+"""Databento ingestion for GC and SI futures (#4).
 
 Pull per-expiry data with parent symbology (GC.FUT, SI.FUT) from GLBX.MDP3,
 cache locally so requests are not re-billed. Reuse finm37000.db_env_util for
@@ -16,7 +16,7 @@ def pull_expiries(symbol: str, start: str, end: str, schema: str = "ohlcv-1d") -
     """Download per-expiry data for a parent symbol (e.g. 'GC.FUT').
 
     Returns a tidy frame indexed by (ts, instrument_id). Caches raw downloads
-    under data/ (gitignored). See Issue 2.
+    under data/ (gitignored). See #4.
     """
     raise NotImplementedError
 

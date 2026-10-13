@@ -1,4 +1,4 @@
-"""Cointegration tests and hedge-ratio estimation (Issue 5).
+"""Cointegration tests and hedge-ratio estimation (#7).
 
 Confirm each log-price is I(1) (ADF), then test the pair with Engle-Granger
 (use EG critical values on the estimated residual) and Johansen. Estimate the

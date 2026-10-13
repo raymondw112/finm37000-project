@@ -1,4 +1,4 @@
-"""Signal generation and position sizing (Issue 7).
+"""Signal generation and position sizing (#9).
 
 Standardize the spread to a z-score (parameters estimated only on prior data),
 enter at |z| ~ 2, exit near 0, optional stop at |z| ~ 3-4. Size positions in
@@ -22,5 +22,5 @@ def generate_signals(z: pd.Series, entry: float = 2.0, exit_: float = 0.0,
 
 
 def size_positions(signal: pd.Series, beta: pd.Series, mode: str = "dollar") -> pd.DataFrame:
-    """Translate a spread signal into GC/SI contract counts. See Issue 7."""
+    """Translate a spread signal into GC/SI contract counts. See #9."""
     raise NotImplementedError
