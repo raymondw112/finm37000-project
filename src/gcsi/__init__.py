@@ -8,9 +8,10 @@ Component map (each module maps to a GitHub Issue):
     signals      z-score entry/exit + position sizing          (Issue 7)
     backtest     walk-forward engine with costs                (Issue 8)
     metrics      performance evaluation                        (Issue 9)
+    synthetic    synthetic data with known parameters, for tests (Issue #14)
 
 Data layer reuses the course `finm37000` package where possible.
 All functions are stubs for now; see docs/DESIGN.md for the pipeline.
 """
 
-__all__ = ["data", "rolls", "cointegration", "ou", "signals", "backtest", "metrics"]
+__all__ = ["data", "rolls", "cointegration", "ou", "signals", "backtest", "metrics", "synthetic"]
