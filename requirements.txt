@@ -1,0 +1,12 @@
+# Python 3.12. Core pipeline dependencies (all free / open source).
+pandas
+numpy
+scipy
+statsmodels
+matplotlib
+jupyterlab
+pytest
+python-dotenv
+databento
+pykalman   # time-varying (Kalman) hedge ratio
+# Optional (stretch, copula model): copulas

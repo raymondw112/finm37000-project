@@ -216,3 +216,8 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Project: Databento data cache and generated outputs
+data/*
+!data/.gitkeep
+output/
