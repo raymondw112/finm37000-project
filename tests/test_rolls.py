@@ -109,6 +109,18 @@ def test_align_pair_inner_join():
     assert list(out.columns) == ["GC", "SI"] and len(out) == 2
 
 
+@pytest.mark.parametrize("rule", ["fnd", "volume"])
+def test_expiring_front_month_at_data_start_is_skipped(rule):
+    # repro from the review on #22: a GCZ4 that only trades in December, when
+    # its roll date (before FND on 29 Nov) is already before the first bar
+    bars = _bars()
+    dec = bars[(bars.symbol == "GCJ5") & (bars.ts_event < "2024-12-27")].copy()
+    dec["symbol"], dec["instrument_id"], dec["close"] = "GCZ4", 9, 99.0
+    sched = rolls.roll_schedule(pd.concat([dec, bars], ignore_index=True), "GC", rule=rule)
+    assert sched.loc[0, "contract"] == "GCG2025"
+    assert "GCZ2024" not in set(sched["contract"])
+
+
 def _decade_chain(start="2010-06-07", end="2021-06-30") -> pd.DataFrame:
     """Every active GC month over 11 years, each listed ~200 days before expiry.
 
