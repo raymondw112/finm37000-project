@@ -1,0 +1,39 @@
+[build-system]
+requires = ["setuptools >= 77.0.3"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "gcsi"
+version = "0.1.0"
+description = "Gold (GC) / Silver (SI) futures pairs-trading pipeline for FINM 37000"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    # Course package: Databento key handling, continuous/roll helpers.
+    # Pinned to a commit so every teammate gets the same version.
+    "finm37000-autumn-2026 @ git+https://github.com/pattersonem/finm37000-autumn-2026.git@d5e4c8e00d32810ef39bc047d598084b3c237667",
+    "databento",
+    "pandas",
+    "numpy",
+    "scipy",
+    "statsmodels",
+    "matplotlib",
+    "python-dotenv",
+    "pykalman",  # time-varying (Kalman) hedge ratio
+]
+
+[project.optional-dependencies]
+dev = ["pytest"]
+notebooks = ["jupyterlab"]
+copula = ["copulas"]  # stretch goal, Issue #12
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+markers = [
+    "db: requires Databento access (network + billing); skipped by default.",
+]
+addopts = ["-m not db", "--strict-markers"]
