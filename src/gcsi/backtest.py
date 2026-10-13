@@ -1,4 +1,4 @@
-"""Walk-forward backtest engine with realistic futures costs (Issue 8).
+"""Walk-forward backtest engine with realistic futures costs (#10).
 
 Calibrate hedge ratio and thresholds only on data prior to each trade.
 PnL on the actual-price series (not the ratio-adjusted one), in dollars per
@@ -18,6 +18,6 @@ def run(positions: pd.DataFrame, prices: pd.DataFrame, costs: dict) -> pd.DataFr
 
     positions: GC/SI contract counts over time (from signals.size_positions).
     prices: actual (unadjusted) GC/SI prices with roll dates/costs.
-    costs: {'bid_ask', 'commission', 'roll_cost', ...}. See Issue 8.
+    costs: {'bid_ask', 'commission', 'roll_cost', ...}. See #10.
     """
     raise NotImplementedError

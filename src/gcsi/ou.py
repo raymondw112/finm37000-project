@@ -1,4 +1,4 @@
-"""Ornstein-Uhlenbeck fit and half-life (Issue 6).
+"""Ornstein-Uhlenbeck fit and half-life (#8).
 
 Model the spread X_t with dX = kappa(theta - X)dt + sigma dW. Fit via the
 exact AR(1) discretization (OLS) or scipy MLE, recover kappa, theta, sigma,

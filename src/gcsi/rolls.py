@@ -1,4 +1,4 @@
-"""Continuous-contract construction and roll adjustment (Issue 3).
+"""Continuous-contract construction and roll adjustment (#5).
 
 Databento continuous prices are UNADJUSTED. We build the continuous series
 ourselves and produce TWO series per instrument:
@@ -24,7 +24,7 @@ def build_continuous(expiries: pd.DataFrame, month: int = 0, roll_days_before_fn
     """Stitch per-expiry data into one continuous series.
 
     month: 0 = front (CL1 / .c.0), 1 = second (CL2 / .c.1).
-    Returns the adjusted series plus a column of roll dates. See Issue 3.
+    Returns the adjusted series plus a column of roll dates. See #5.
     """
     raise NotImplementedError
 

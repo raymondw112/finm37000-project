@@ -1,4 +1,4 @@
-"""Performance evaluation (Issue 9).
+"""Performance evaluation (#11).
 
 Summarize a backtest equity curve: total and annualized return, Sharpe,
 max drawdown, hit rate, turnover. Stress the strategy out-of-sample across
