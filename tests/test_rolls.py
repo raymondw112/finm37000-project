@@ -32,6 +32,9 @@ def _bars(cross_on: str | None = "2025-01-15") -> pd.DataFrame:
     ("GCG7", "2026-10-13", ("GC", 2027, 2)),
     ("SIH0", "2029-11-01", ("SI", 2030, 3)),
     ("MGCJ5", "2025-01-02", ("MGC", 2025, 4)),
+    # one-digit years repeat every decade (review on #22)
+    ("GCZ0", "2010-06-07", ("GC", 2010, 12)),
+    ("GCZ0", "2020-06-01", ("GC", 2020, 12)),
 ])
 def test_parse_symbol(sym, ref, expected):
     assert rolls.parse_symbol(sym, pd.Timestamp(ref)) == expected
@@ -104,6 +107,44 @@ def test_align_pair_inner_join():
     b = pd.DataFrame({"close": [5.0, 6.0]}, index=pd.to_datetime(["2025-01-02", "2025-01-03"]))
     out = rolls.align_pair(a, b)
     assert list(out.columns) == ["GC", "SI"] and len(out) == 2
+
+
+def _decade_chain(start="2010-06-07", end="2021-06-30") -> pd.DataFrame:
+    """Every active GC month over 11 years, each listed ~200 days before expiry.
+
+    Long enough that symbols repeat (GCZ0 = Dec 2010 and Dec 2020). Each
+    contract gets its own instrument_id and a price that encodes its year, so
+    a merged contract would show up as a wrong price.
+    """
+    from gcsi import contracts
+    idx = pd.bdate_range(start, end, tz="UTC", name="ts_event")
+    frames = []
+    for k, (y, m) in enumerate(contracts.active_contracts("GC", "2010-01-01", end)):
+        expiry = contracts.last_trading_day(y, m).tz_localize("UTC")
+        alive = idx[(idx <= expiry) & (idx >= expiry - pd.Timedelta(days=200))]
+        if len(alive) == 0:
+            continue
+        frames.append(pd.DataFrame({
+            "ts_event": alive, "instrument_id": 100 + k,
+            "symbol": contracts.contract_symbol("GC", y, m),
+            "close": float(y) + m / 100, "volume": 1000}))
+    return pd.concat(frames, ignore_index=True)
+
+
+def test_symbols_repeating_a_decade_apart_stay_separate():
+    bars = _decade_chain()
+    assert (bars["symbol"] == "GCZ0").any()
+    sched = rolls.roll_schedule(bars, "GC")
+    keys = list(zip(sched["year"], sched["month"]))
+    assert keys == sorted(keys) and len(keys) == len(set(keys))
+    assert {"GCZ2010", "GCZ2020"} <= set(sched["contract"])
+    assert sched.loc[sched.contract == "GCZ2020", "d0"].iloc[0].year == 2020
+    # every day, the raw price is the one of the contract we say we hold
+    cont = rolls.build_continuous(bars, "GC", adjustment="raw", schedule=sched)
+    expected = cont["contract"].str[-4:].astype(int) + cont["contract"].map(
+        dict(zip(sched["contract"], sched["month"]))) / 100
+    assert (cont["raw_close"] == expected).all()
+    assert len(rolls.roll_log(bars, sched)) == len(sched) - 1
 
 
 # --- against the #14 synthetic fixtures (runs once #20 is merged) -------------
