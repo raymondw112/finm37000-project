@@ -100,7 +100,7 @@ pytest            # skips tests marked `db` (they need Databento access)
 pytest -m db      # run only the Databento tests
 ```
 
-GitHub Actions ([.github/workflows/tests.yml](.github/workflows/tests.yml)) runs `pytest -q` on Python 3.12 for every pull request to `main` and every push to `main`. It uses no secrets, so `db` tests are always skipped there.
+GitHub Actions ([.github/workflows/tests.yml](.github/workflows/tests.yml)) runs `pytest -q` on Python 3.12, on Linux and Windows, for every pull request to `main` and every push to `main`. It uses no secrets, so `db` tests are always skipped there.
 
 ### Repository Layout
 
