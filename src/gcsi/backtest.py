@@ -58,6 +58,11 @@ class BacktestConfig:
     cost_per_contract: USD per contract per side, any product.
                    PLACEHOLDER until the #24 cost model lands.
     initial_equity: starting equity in USD.
+
+    Warm-up: beta needs `window` prior days and the z-score a further
+    `z_lookback` days of spread, so no trade is possible before row
+    `window + z_lookback` (312 trading days, about 15 months, with the
+    defaults). The flat start of a run is warm-up, not a result.
     """
 
     window: int = 252
@@ -247,6 +252,8 @@ def run(gc: pd.DataFrame, si: pd.DataFrame, config: BacktestConfig | dict | None
     Returns a daily frame: positions per leg (GC, MGC, SI, SIL), alpha, beta,
     spread, z, signal (+1 = long GC / short SI), gross_pnl, costs, net_pnl,
     equity (USD).
+    The first `window + z_lookback` rows are warm-up and always flat (see
+    `BacktestConfig`); start evaluation windows after them.
     """
     if config is None:
         config = BacktestConfig()

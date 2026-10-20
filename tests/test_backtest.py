@@ -185,6 +185,13 @@ def test_zscore_uses_only_prior_days_for_mean_and_std(pair_legs):
     assert out["z"].iloc[t] == pytest.approx(expected, rel=1e-9)
 
 
+def test_warm_up_is_window_plus_z_lookback(pair_legs):
+    out = backtest.run(*pair_legs, CONFIG)
+    warm = CONFIG.window + CONFIG.z_lookback
+    assert out["z"].iloc[:warm].isna().all() and out["z"].iloc[warm:].notna().all()
+    assert (out[list(LEGS)].iloc[:warm] == 0).all().all()
+
+
 # --------------------------------------------------------------------------- #
 # Signs, sizing, config
 # --------------------------------------------------------------------------- #
