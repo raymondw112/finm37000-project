@@ -1,5 +1,7 @@
 # finm37000-project
 
+[![tests](https://github.com/ryotahidaka/finm37000-project/actions/workflows/tests.yml/badge.svg)](https://github.com/ryotahidaka/finm37000-project/actions/workflows/tests.yml)
+
 > **Status: Part 1 (planning).** This README describes the intended outcome and how to run the project. Sections marked **TODO** are to be agreed on by the team in the README PR. Run instructions are aspirational until the code lands.
 
 ## Team
@@ -97,6 +99,8 @@ python -m gcsi.run                                        # TODO
 pytest            # skips tests marked `db` (they need Databento access)
 pytest -m db      # run only the Databento tests
 ```
+
+GitHub Actions ([.github/workflows/tests.yml](.github/workflows/tests.yml)) runs `pytest -q` on Python 3.12, on Linux and Windows, for every pull request to `main` and every push to `main`. It uses no secrets, so `db` tests are always skipped there.
 
 ### Repository Layout
 
