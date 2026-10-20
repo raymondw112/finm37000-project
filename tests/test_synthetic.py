@@ -7,7 +7,7 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 import pytest
-from statsmodels.tsa.stattools import adfuller
+from statsmodels.tsa.stattools import adfuller, coint
 
 from gcsi import synthetic as syn
 
@@ -48,7 +48,7 @@ def test_ou_spread_recovers_true_parameters(ou_spread, ou_params):
 
 
 def test_ou_spread_is_stationary(ou_spread):
-    assert adfuller(ou_spread)[1] < 0.01
+    assert adfuller(ou_spread, result_object=False)[1] < 0.01
 
 
 # --------------------------------------------------------------------------- #
@@ -68,9 +68,10 @@ def test_coint_pair_recovers_hedge_ratio(coint_pair):
     beta_hat, alpha_hat = np.polyfit(ls, lg, 1)
     assert beta_hat == pytest.approx(coint_pair.params.beta, abs=0.05)
 
-    resid = lg - alpha_hat - beta_hat * ls
-    assert adfuller(resid)[1] < 0.01   # spread is stationary ...
-    assert adfuller(ls)[1] > 0.05      # ... while the legs are I(1)
+    # beta is estimated, so test the residual with Engle-Granger (MacKinnon
+    # critical values) rather than plain ADF, which would be too optimistic
+    assert coint(lg, ls)[1] < 0.01                         # cointegrated ...
+    assert adfuller(ls, result_object=False)[1] > 0.05     # ... while the legs are I(1)
 
 
 def test_coint_pair_true_spread_matches_prices(coint_pair):
