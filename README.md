@@ -1,7 +1,5 @@
 # finm37000-project
 
-[![tests](https://github.com/ryotahidaka/finm37000-project/actions/workflows/tests.yml/badge.svg)](https://github.com/ryotahidaka/finm37000-project/actions/workflows/tests.yml)
-
 > **Status: Part 1 (planning).** This README describes the intended outcome and how to run the project. Sections marked **TODO** are to be agreed on by the team in the README PR. Run instructions are aspirational until the code lands.
 
 ## Team
@@ -77,15 +75,18 @@ cp .env.example .env              # then paste your key into .env (git-ignored)
 pytest                            # import smoke test; should pass on a fresh clone
 ```
 
-The key is read from the `DATABENTO_API_KEY` environment variable: export it as above, or put it in `.env` (loading `.env` with `python-dotenv` is part of Issue #4). The course helper `finm37000.db_env_util.get_databento_api_key()` reads `~/.databento_api_key` instead, if you already set that up for class.
+The key is read from the `DATABENTO_API_KEY` environment variable: export it as above, or put it in `.env`. If neither is set, `gcsi.data` falls back to the course helper `finm37000.get_databento_api_key()`, which reads `~/.databento_api_key`.
 
 `requirements.txt` pins every package, including the course `finm37000` package at a fixed commit. Direct dependencies are declared in `pyproject.toml`. Use `pip install -e ".[dev]"` instead if you only want the latest compatible versions.
 
 ### Running the project
 
 ```bash
-# 1. Fetch and cache data
-python -m gcsi.data --start YYYY-MM-DD --end YYYY-MM-DD   # TODO
+# 1. Fetch and cache data (GC and SI daily bars, every contract, from the dataset start)
+python -m gcsi.data --cost-only                          # free: prints the estimated cost
+python -m gcsi.data --start 2010-06-06 --end YYYY-MM-DD  # pulls, validates, caches under data/databento/
+#    Refuses to pull if the estimate is above --max-cost (default $5) unless you add --yes.
+#    A second run is served from the cache and makes no requests.
 
 # 2. Run the analysis / strategy
 python -m gcsi.run                                        # TODO
@@ -99,8 +100,6 @@ python -m gcsi.run                                        # TODO
 pytest            # skips tests marked `db` (they need Databento access)
 pytest -m db      # run only the Databento tests
 ```
-
-GitHub Actions ([.github/workflows/tests.yml](.github/workflows/tests.yml)) runs `pytest -q` on Python 3.12, on Linux and Windows, for every pull request to `main` and every push to `main`. It uses no secrets, so `db` tests are always skipped there.
 
 ### Repository Layout
 
