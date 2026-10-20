@@ -126,8 +126,11 @@ def ounce_neutral_mix(ounces: float, standard: str, micro: str) -> tuple[int, in
     """Split a target in troy ounces into (standard, micro) contract counts.
 
     Uses as many standard contracts as fit, then rounds the remainder to the
-    nearest micro. Signed: a negative target gives negative counts.
-    E.g. 12,345 oz of silver -> (2 SI, 2 SIL) = 12,000 oz.
+    nearest micro. If the rounded micros add up to a whole standard contract,
+    they are carried over, so the result never holds a full standard's worth
+    of micros. Signed: a negative target gives negative counts.
+    E.g. 12,345 oz of silver -> (2 SI, 2 SIL) = 12,000 oz;
+         9,800 oz of silver -> (2 SI, 0 SIL), not (1 SI, 5 SIL).
     """
     std, mic = get_spec(standard), get_spec(micro)
     if std.underlying != mic.underlying:
@@ -136,4 +139,6 @@ def ounce_neutral_mix(ounces: float, standard: str, micro: str) -> tuple[int, in
     remaining = abs(ounces)
     n_std = int(remaining // std.multiplier)
     n_mic = int(round((remaining - n_std * std.multiplier) / mic.multiplier))
+    per_std = int(round(std.multiplier / mic.multiplier))  # 10 MGC per GC, 5 SIL per SI
+    n_std, n_mic = n_std + n_mic // per_std, n_mic % per_std
     return sign * n_std, sign * n_mic

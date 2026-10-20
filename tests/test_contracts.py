@@ -67,6 +67,11 @@ def test_active_contracts_respect_cycle():
         (-250, "GC", "MGC", (-2, -5)),
         (40, "GC", "MGC", (0, 4)),
         (0, "SI", "SIL", (0, 0)),
+        # micros that round up to a full standard are carried over (review on #21)
+        (9_800, "SI", "SIL", (2, 0)),
+        (195, "GC", "MGC", (2, 0)),
+        (-9_800, "SI", "SIL", (-2, 0)),
+        (9_400, "SI", "SIL", (1, 4)),
     ],
 )
 def test_ounce_neutral_mix(ounces, standard, micro, expected):
