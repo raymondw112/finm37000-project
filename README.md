@@ -94,15 +94,18 @@ cp .env.example .env              # then paste your key into .env (git-ignored)
 pytest                            # import smoke test; should pass on a fresh clone
 ```
 
-The key is read from the `DATABENTO_API_KEY` environment variable: export it as above, or put it in `.env` (loading `.env` with `python-dotenv` is part of Issue #4). The course helper `finm37000.db_env_util.get_databento_api_key()` reads `~/.databento_api_key` instead, if you already set that up for class.
+The key is read from the `DATABENTO_API_KEY` environment variable: export it as above, or put it in `.env`. If neither is set, `gcsi.data` falls back to the course helper `finm37000.get_databento_api_key()`, which reads `~/.databento_api_key`.
 
 `requirements.txt` pins every package, including the course `finm37000` package at a fixed commit. Direct dependencies are declared in `pyproject.toml`. Use `pip install -e ".[dev]"` instead if you only want the latest compatible versions.
 
 ### Running the project
 
 ```bash
-# 1. Fetch and cache data
-python -m gcsi.data --start YYYY-MM-DD --end YYYY-MM-DD   # TODO
+# 1. Fetch and cache data (GC and SI daily bars, every contract, from the dataset start)
+python -m gcsi.data --cost-only                          # free: prints the estimated cost
+python -m gcsi.data --start 2010-06-06 --end YYYY-MM-DD  # pulls, validates, caches under data/databento/
+#    Refuses to pull if the estimate is above --max-cost (default $5) unless you add --yes.
+#    A second run is served from the cache and makes no requests.
 
 # 2. Run the analysis / strategy
 python -m gcsi.run                                        # TODO
