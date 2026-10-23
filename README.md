@@ -1,6 +1,8 @@
 # finm37000-project
 
-> **Status: Part 1 (planning).** This README describes the intended outcome and how to run the project. Sections marked **TODO** are to be agreed on by the team in the README PR. Run instructions are aspirational until the code lands.
+[![tests](https://github.com/ryotahidaka/finm37000-project/actions/workflows/tests.yml/badge.svg)](https://github.com/ryotahidaka/finm37000-project/actions/workflows/tests.yml)
+
+> **Status: Part 3 (building the pipeline).** Scope narrowed to the daily strategy after the professor's review on 18 Oct; see [Future work](#future-work). Run instructions become final once ingestion (#4) lands.
 
 ## Team
 
@@ -27,10 +29,27 @@ A) At the times of inflation and market turmoil, investor prefer safe assets in 
 
 ### Scope
 
-- **Market(s):** Commodites Previous Metals Market
-- **Date range:** Past 2 years
-- **Databento dataset and schema:** `GLBX.MDP3` (CME Globex). Schema(s): prices and trades
-- **Out of scope:** TODO. Note that a Brent/WTI mean-reverting strategy is not permitted for this course.
+- **Market(s):** COMEX precious-metals futures: Gold (GC) and Silver (SI), with Micro Gold (MGC) and Micro Silver (SIL) for sizing
+- **Frequency:** daily signals on daily closes
+- **Date range:** 2010-06-06 (start of `GLBX.MDP3`) to today; stress windows Aug-Dec 2011, Apr 2013, Mar 2020, 2022 (#19)
+- **Databento dataset and schema:** `GLBX.MDP3` (CME Globex). Schemas: `definition` and `ohlcv-1d` for every GC and SI contract via parent symbology (`GC.FUT`, `SI.FUT`); optionally `statistics` for settlement and open interest
+- **Out of scope:** intraday execution analysis, execution simulation and a copula signal (see [Future work](#future-work)). A Brent/WTI mean-reverting strategy is not permitted for this course.
+
+### How it works
+
+```mermaid
+flowchart LR
+    K["Your Databento key"] --> D["Ingestion #4<br/>definition + ohlcv-1d<br/>cost check, cache"]
+    D --> R["Continuous series #5<br/>roll before first notice"]
+    R -->|ratio-adjusted closes| S["Statistics #7 #8<br/>cointegration, hedge ratio,<br/>OU half-life"]
+    S --> G["Signals #9<br/>z-score entry/exit,<br/>contracts per leg"]
+    R -->|actual prices + roll log| B
+    G --> B["Walk-forward backtest #10<br/>costs #24, PnL ledger #25"]
+    B --> M["Evaluation #11<br/>Sharpe, drawdown,<br/>stress windows"]
+    M --> O["output/<br/>tables + figures"]
+```
+
+Signals use the ratio-adjusted series so roll gaps never look like price moves; PnL uses actual prices of the contract held that day, with each roll charged explicitly.
 
 ### Desired Outcome
 
@@ -101,6 +120,8 @@ pytest            # skips tests marked `db` (they need Databento access)
 pytest -m db      # run only the Databento tests
 ```
 
+GitHub Actions ([.github/workflows/tests.yml](.github/workflows/tests.yml)) runs `pytest -q` on Python 3.12, on Linux and Windows, for every pull request to `main` and every push to `main`. It uses no secrets, so `db` tests are always skipped there.
+
 ### Repository Layout
 
 ```
@@ -126,9 +147,10 @@ The work is tracked in the [GitHub Issues](../../issues). Each issue maps to a s
 | Milestone | Course due | Goal |
 | --- | --- | --- |
 | Part 1 | Lecture 2 | Repo, README, and Issues agreed by all members |
-| Part 2 | Lecture 3 | TODO (e.g. data pipeline and exploration) |
-| Part 3 | Lecture 4 | TODO (e.g. core analysis or strategy) |
-| Completion | Lecture 5 | Polished, reproducible project |
+| Part 2 | Lecture 3 | Environment, test fixtures, contract specs, continuous series (#3, #14, #18, #5) |
+| Part 3 | Lecture 4 | Ingestion, CI, cointegration and OU, signals, backtest skeleton (#4, #23, #7, #8, #9, #10) |
+| Part 4 | Lecture 5 | Cost model, PnL ledger, full backtest, EDA, evaluation (#24, #25, #10, #6, #11) |
+| Completion | Final | README with exact run commands, results and presentation (#13) |
 
 ### Contributing / Workflow
 
@@ -137,6 +159,15 @@ The work is tracked in the [GitHub Issues](../../issues). Each issue maps to a s
 3. Open a Pull Request to the main repo that references the issue (`Closes #<n>`).
 4. At least one other team member reviews; the Tech leader merges.
 5. Discuss scope changes in the relevant Issue, not offline.
+
+### Future work
+
+Moved out of scope after the professor's review on 18 Oct, which noted the project had two focal points (long-term continuous adjustment and trade-level execution) that could each be a project on their own. Details in [docs/DESIGN.md](docs/DESIGN.md#8-future-work).
+
+- Execution layer: leg the spread on the harder-to-fill side, route across GC/MGC and SI/SIL (was #26)
+- Execution simulator on intraday top-of-book (was #27)
+- Copula signal as a second strategy (was #12)
+- Cross-exchange routing (COMEX vs another venue)
 
 ### References
 
