@@ -2,12 +2,13 @@
 from __future__ import annotations
 
 import inspect
+from dataclasses import replace
 
 import numpy as np
 import pandas as pd
 import pytest
 
-from gcsi import backtest, contracts, rolls
+from gcsi import backtest, contracts, rolls, signals
 from gcsi.backtest import LEGS, BacktestConfig
 
 GC_MULT = contracts.GC.multiplier
@@ -178,18 +179,40 @@ def test_hedge_ratio_uses_only_prior_days(pair_legs):
 
 
 def test_zscore_uses_only_prior_days_for_mean_and_std(pair_legs):
-    out = backtest.run(*pair_legs, CONFIG)
+    cfg = replace(CONFIG, zscore="simple")
+    out = backtest.run(*pair_legs, cfg)
     t = 500
-    prior = out["spread"].iloc[t - CONFIG.z_lookback:t]  # rows t-L .. t-1
+    prior = out["spread"].iloc[t - cfg.z_lookback:t]  # rows t-L .. t-1
     expected = (out["spread"].iloc[t] - prior.mean()) / prior.std()
     assert out["z"].iloc[t] == pytest.approx(expected, rel=1e-9)
 
 
-def test_warm_up_is_window_plus_z_lookback(pair_legs):
-    out = backtest.run(*pair_legs, CONFIG)
-    warm = CONFIG.window + CONFIG.z_lookback
-    assert out["z"].iloc[:warm].isna().all() and out["z"].iloc[warm:].notna().all()
-    assert (out[list(LEGS)].iloc[:warm] == 0).all().all()
+def test_consistent_zscore_reprices_past_window_with_todays_beta(pair_legs):
+    gc, si = pair_legs
+    out = backtest.run(gc, si, CONFIG)
+    t, L = 500, CONFIG.z_lookback
+    a, b = out["alpha"].iloc[t], out["beta"].iloc[t]
+    past = (np.log(gc["close"]) - a - b * np.log(si["close"])).iloc[t - L:t]
+    expected = (out["spread"].iloc[t] - past.mean()) / past.std()
+    assert out["z"].iloc[t] == pytest.approx(expected, rel=1e-9)
+
+
+@pytest.mark.parametrize("zscore", ["simple", "consistent"])
+def test_warm_up(pair_legs, zscore):
+    cfg = replace(CONFIG, zscore=zscore)
+    out = backtest.run(*pair_legs, cfg)
+    z_ready = cfg.window + (cfg.z_lookback if zscore == "simple" else 0)
+    assert out["z"].iloc[:z_ready].isna().all() and out["z"].iloc[z_ready:].notna().all()
+    assert cfg.warm_up == z_ready + cfg.fill_lag
+    assert (out[list(LEGS)].iloc[:cfg.warm_up] == 0).all().all()
+
+
+@pytest.mark.parametrize("lag", [0, 1, 3])
+def test_fill_lag_delays_positions(pair_legs, lag):
+    cfg = replace(CONFIG, fill_lag=lag)
+    out = backtest.run(*pair_legs, cfg)
+    target = backtest.run(*pair_legs, replace(cfg, fill_lag=0))[list(LEGS)]
+    pd.testing.assert_frame_equal(out[list(LEGS)], target.shift(lag).fillna(0).astype(int))
 
 
 # --------------------------------------------------------------------------- #
@@ -199,15 +222,16 @@ def test_long_spread_is_long_gc_short_si(pair_legs):
     out = backtest.run(*pair_legs, CONFIG)
     gc_oz = out["GC"] * GC_MULT + out["MGC"] * contracts.MGC.multiplier
     si_oz = out["SI"] * SI_MULT + out["SIL"] * contracts.SIL.multiplier
-    long, short = out["signal"] == 1, out["signal"] == -1
+    decided = out["signal"].shift(CONFIG.fill_lag).fillna(0)  # held fill_lag days later
+    long, short = decided == 1, decided == -1
     assert long.any() and short.any()
     assert (gc_oz[long] > 0).all() and (si_oz[long] < 0).all()
     assert (gc_oz[short] < 0).all() and (si_oz[short] > 0).all()
-    assert (gc_oz[out["signal"] == 0] == 0).all()
+    assert (gc_oz[decided == 0] == 0).all()
 
 
 def test_beta_mode_sizes_si_notional_to_beta_times_gc():
-    target = backtest._size_positions(1, 0.8, 2000.0, 25.0, 1_000_000.0, "beta", True)
+    target = signals.target_contracts(1, 0.8, 2000.0, 25.0, 1_000_000.0, "beta", True)
     gc_notional = (target["GC"] * GC_MULT + target["MGC"] * contracts.MGC.multiplier) * 2000.0
     si_notional = (target["SI"] * SI_MULT + target["SIL"] * contracts.SIL.multiplier) * 25.0
     assert abs(gc_notional - 1_000_000.0) <= contracts.MGC.multiplier * 2000.0
@@ -221,3 +245,52 @@ def test_config_as_dict_and_missing_columns(pair_legs):
     pd.testing.assert_frame_equal(a, b)
     with pytest.raises(ValueError, match="raw_close"):
         backtest.run(gc.drop(columns="raw_close"), si)
+
+
+# --------------------------------------------------------------------------- #
+# Costs, Kalman and walk-forward (#10 final)
+# --------------------------------------------------------------------------- #
+def test_default_cost_model_and_kalman_run(pair_legs):
+    out = backtest.run(*pair_legs, replace(CONFIG, cost_per_contract=None, hedge="kalman"))
+    assert out["costs"].sum() > 0 and out["beta"].notna().sum() > 0
+    a = out[["ideal_pnl", "sizing_residual", "trade_costs", "roll_costs", "net_pnl"]].sum()
+    assert a["ideal_pnl"] + a["sizing_residual"] - a["trade_costs"] - a["roll_costs"] == \
+        pytest.approx(a["net_pnl"])
+
+
+def test_bad_config_values():
+    with pytest.raises(ValueError):
+        BacktestConfig(hedge="magic")
+    with pytest.raises(ValueError):
+        BacktestConfig(zscore="other")
+    with pytest.raises(ValueError):
+        BacktestConfig(fill_lag=-1)
+
+
+def test_walk_forward_picks_on_past_years_only(pair_legs):
+    gc, si = pair_legs
+    base = replace(CONFIG, window=120)
+    grid = {"entry": [1.5, 2.5]}
+    wf = backtest.walk_forward(gc, si, base, grid, train_years=2)
+    daily, choices = wf["daily"], wf["choices"]
+    assert set(daily.index.year) == set(choices.index)
+    for year, row in choices.iterrows():
+        # the chosen entry is the one with the best Sharpe on the 2 years before
+        train = (gc.index.year >= year - 2) & (gc.index.year < year)
+        scores = {e: backtest.sharpe(wf["runs"][(("entry", e),)].loc[train, "net_pnl"],
+                                     base.initial_equity) for e in grid["entry"]}
+        assert row["entry"] == max(scores, key=scores.get)
+    # stitched positions are the chosen run's positions in each test year
+    for year, row in choices.iterrows():
+        run = wf["runs"][(("entry", row["entry"]),)]
+        days = daily.index[daily.index.year == year]
+        pd.testing.assert_frame_equal(daily.loc[days, list(LEGS)], run.loc[days, list(LEGS)])
+
+
+def test_walk_forward_does_not_use_future_data(pair_legs):
+    gc, si = pair_legs
+    base, grid = replace(CONFIG, window=120), {"entry": [1.5, 2.5]}
+    a = backtest.walk_forward(gc, si, base, grid, train_years=2)["choices"]
+    cut = gc.index[gc.index.year <= a.index[1]].max()
+    b = backtest.walk_forward(gc.loc[:cut], si.loc[:cut], base, grid, train_years=2)["choices"]
+    pd.testing.assert_frame_equal(a.loc[b.index], b)
