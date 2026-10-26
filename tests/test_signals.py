@@ -3,7 +3,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from gcsi import contracts, signals
+from gcsi import cointegration, contracts, signals
 
 
 def _series(values, start="2025-01-02"):
@@ -128,19 +128,15 @@ def test_bad_mode_rejected():
         signals.target_contracts(1, 0.8, 2000.0, 25.0, 1e6, mode="ounce")
 
 
-# --- swap-in safety: matches the #10 skeleton's placeholders when they exist --
+# --- the backtest uses these functions (placeholders from #30 were swapped out) --
 
-def test_matches_backtest_placeholders_if_present(coint_pair):
-    bt = pytest.importorskip("gcsi.backtest")
-    if not hasattr(bt, "_generate_signals"):
-        pytest.skip("backtest placeholders not on this branch (PR #30)")
-    p = np.log(coint_pair.prices)
-    hr = bt._rolling_hedge_ratio(p["GC"], p["SI"], 252)
-    s = signals.spread(p["GC"], p["SI"], hr["alpha"], hr["beta"])
-    pd.testing.assert_series_equal(signals.zscore(s, 60), bt._zscore(bt._spread(p["GC"], p["SI"], hr["alpha"], hr["beta"]), 60), check_names=False)
-    z = signals.zscore(s, 60)
-    pd.testing.assert_series_equal(signals.generate_signals(z), bt._generate_signals(z, 2.0, 0.0, 4.0))
-    for t in (300, 900, 1800):
-        args = (int(signals.generate_signals(z).iloc[t]) or 1, float(hr["beta"].iloc[t]),
-                float(coint_pair.prices["GC"].iloc[t]), float(coint_pair.prices["SI"].iloc[t]), 1e6, "beta", True)
-        assert signals.target_contracts(*args) == bt._size_positions(*args)
+def test_backtest_signal_is_this_module(coint_pair):
+    from gcsi import backtest
+    px = coint_pair.prices
+    leg = lambda x, c: pd.DataFrame({"close": x, "raw_close": x, "contract": c})
+    cfg = backtest.BacktestConfig(zscore="simple", fill_lag=0, cost_per_contract=0.0)
+    out = backtest.run(leg(px["GC"], "G"), leg(px["SI"], "S"), cfg)
+    p = np.log(px)
+    hr = cointegration.rolling_hedge_ratio(p["GC"], p["SI"], 252)
+    z = signals.zscore(signals.spread(p["GC"], p["SI"], hr["alpha"], hr["beta"]), 60)
+    pd.testing.assert_series_equal(out["signal"], signals.generate_signals(z), check_names=False)
