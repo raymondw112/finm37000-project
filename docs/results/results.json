@@ -1,0 +1,227 @@
+{
+  "source": "databento",
+  "eda": {
+    "start": "2010-06-07",
+    "end": "2026-10-23",
+    "days": 4248,
+    "gc_is_I1": true,
+    "si_is_I1": true,
+    "eg_beta": 0.5902547000435825,
+    "eg_alpha": 5.543685183669505,
+    "eg_pvalue": 0.8703428296324993,
+    "eg_tstat": -1.1506961134634996,
+    "eg_crit_5pct": -3.337569064409182,
+    "johansen_rank_trace": 0,
+    "johansen_beta": 1.069158958516676,
+    "ou_half_life_days": 940.475834271593,
+    "ou_kappa": 0.000737017534423725,
+    "ou_sigma_eq": 0.19531072777255287,
+    "half_life_by_window": {
+      "126": 14.309657039422387,
+      "252": 12.225072870806942,
+      "504": 36.77763984286577,
+      "1008": 98.34728415539071
+    },
+    "years_cointegrated_5pct": 2,
+    "years_tested": 17,
+    "yearly_beta_min": 0.15252318044946578,
+    "yearly_beta_max": 0.793236271101512,
+    "return_corr": 0.7944796328306252,
+    "ratio_last": 74.31430689399555,
+    "ratio_min": 31.658364466583645,
+    "ratio_max": 122.1172638436482,
+    "ratio_mean": 73.19490773886928
+  },
+  "rolls": {
+    "GC": 81,
+    "SI": 82
+  },
+  "config": {
+    "window": 252,
+    "z_lookback": 60,
+    "entry": 2.0,
+    "exit_": 0.0,
+    "stop": 4.0,
+    "gc_notional": 1000000.0,
+    "mode": "beta",
+    "micros": true,
+    "hedge": "rolling",
+    "kalman_delta": 1e-05,
+    "zscore": "consistent",
+    "fill_lag": 1,
+    "cost_per_contract": null,
+    "initial_equity": 1000000.0
+  },
+  "cost_per_contract_usd": {
+    "GC": 7.5,
+    "MGC": 1.45,
+    "SI": 15.0,
+    "SIL": 3.45
+  },
+  "walk_forward": {
+    "summary": {
+      "days": 3065,
+      "total_pnl": -830189.0000000002,
+      "ann_return": -0.06825697487765091,
+      "ann_vol": 0.08009675646566787,
+      "sharpe": -0.8521815100828473,
+      "sortino": -0.7536109189123431,
+      "max_drawdown": -0.8572513000000006,
+      "calmar": -0.07962306371264863,
+      "hit_rate": 0.45010046885465504,
+      "active_share": 0.4871125611745514
+    },
+    "gross": {
+      "days": 3065,
+      "total_pnl": -806797.0000000002,
+      "ann_return": -0.06633371745513866,
+      "ann_vol": 0.0800932795432647,
+      "sharpe": -0.8282057849723408,
+      "sortino": -0.7287229597297509,
+      "max_drawdown": -0.8339039999999996,
+      "calmar": -0.07954598785368423,
+      "hit_rate": 0.463448275862069,
+      "active_share": 0.4730831973898858
+    },
+    "trades": {
+      "n_trades": 43,
+      "trades_per_year": 3.535399673735726,
+      "avg_holding_days": 33.76744186046512,
+      "win_rate": 0.37209302325581395,
+      "avg_trade_pnl": -19185.138372093028,
+      "long_trades": 21,
+      "short_trades": 22
+    },
+    "attribution": {
+      "gross_pnl": -806797.0000000002,
+      "trade_costs": 16357.3,
+      "roll_costs": 7034.7,
+      "net_pnl": -830189.0000000002,
+      "n_trades": 1426,
+      "n_rolls": 95,
+      "ideal_pnl": -806399.5119523103,
+      "sizing_residual": -397.4880476898643
+    },
+    "first_test_year": 2015,
+    "choices": [
+      {
+        "year": 2015,
+        "entry": 2.5,
+        "z_lookback": 40,
+        "train_sharpe": 1.583488097287902
+      },
+      {
+        "year": 2016,
+        "entry": 1.5,
+        "z_lookback": 60,
+        "train_sharpe": 1.4698099779661185
+      },
+      {
+        "year": 2017,
+        "entry": 1.5,
+        "z_lookback": 120,
+        "train_sharpe": 0.9676423722117088
+      },
+      {
+        "year": 2018,
+        "entry": 1.5,
+        "z_lookback": 120,
+        "train_sharpe": 0.6215512727753438
+      },
+      {
+        "year": 2019,
+        "entry": 2.5,
+        "z_lookback": 120,
+        "train_sharpe": 0.016802142409815455
+      },
+      {
+        "year": 2020,
+        "entry": 2.5,
+        "z_lookback": 120,
+        "train_sharpe": 0.4197842059991531
+      },
+      {
+        "year": 2021,
+        "entry": 2.5,
+        "z_lookback": 120,
+        "train_sharpe": -0.41121942336190975
+      },
+      {
+        "year": 2022,
+        "entry": 2.5,
+        "z_lookback": 120,
+        "train_sharpe": -0.6110761345522222
+      },
+      {
+        "year": 2023,
+        "entry": 1.5,
+        "z_lookback": 40,
+        "train_sharpe": -0.8346378256892342
+      },
+      {
+        "year": 2024,
+        "entry": 1.5,
+        "z_lookback": 60,
+        "train_sharpe": 0.3956383719633465
+      },
+      {
+        "year": 2025,
+        "entry": 2.0,
+        "z_lookback": 40,
+        "train_sharpe": 0.07004955591876101
+      },
+      {
+        "year": 2026,
+        "entry": 2.0,
+        "z_lookback": 120,
+        "train_sharpe": -0.12197967492797451
+      }
+    ]
+  },
+  "baseline": {
+    "summary": {
+      "days": 3995,
+      "total_pnl": -267176.69999999925,
+      "ann_return": -0.01685319859824776,
+      "ann_vol": 0.0790867122809866,
+      "sharpe": -0.21309772668726143,
+      "sortino": -0.18788713347429384,
+      "max_drawdown": -0.4763636888980677,
+      "calmar": -0.03537884811756508,
+      "hit_rate": 0.472755578619616,
+      "active_share": 0.4823529411764706
+    },
+    "gross": {
+      "days": 3995,
+      "total_pnl": -236197.99999999927,
+      "ann_return": -0.014899097872340375,
+      "ann_vol": 0.07907739236012973,
+      "sharpe": -0.18841159815295577,
+      "sortino": -0.1645344240735184,
+      "max_drawdown": -0.4543312623874023,
+      "calmar": -0.0327934683474106,
+      "hit_rate": 0.4911051212938005,
+      "active_share": 0.4643304130162703
+    },
+    "trades": {
+      "n_trades": 72,
+      "trades_per_year": 4.541677096370464,
+      "avg_holding_days": 25.76388888888889,
+      "win_rate": 0.5833333333333334,
+      "avg_trade_pnl": -3593.8604166666555,
+      "long_trades": 39,
+      "short_trades": 33
+    },
+    "attribution": {
+      "gross_pnl": -236197.99999999927,
+      "trade_costs": 23519.6,
+      "roll_costs": 7459.1,
+      "net_pnl": -267176.69999999925,
+      "ideal_pnl": -264951.0019085856,
+      "sizing_residual": 28753.001908586342,
+      "n_trades": 1869,
+      "n_rolls": 116
+    }
+  },
+  "truth": null
+}

@@ -267,3 +267,40 @@ def toy_positions(index: pd.DatetimeIndex, gc_lots: int = 5, si_lots: int = 8) -
     gc[50:70] = -gc_lots
     si = -np.sign(gc) * si_lots
     return pd.DataFrame({"GC": gc, "SI": si}, index=index)
+
+
+# --------------------------------------------------------------------------- #
+# A long per-expiry chain for end-to-end runs (report --source synthetic)
+# --------------------------------------------------------------------------- #
+def per_expiry_chain(spot: pd.Series, root: str, annual_carry: float = 0.03,
+                     list_days: int = 400, base_id: int | None = None) -> pd.DataFrame:
+    """Databento-style daily bars for every active month of ``root`` over ``spot``'s dates.
+
+    Each contract of the active cycle (from ``gcsi.contracts``) trades from
+    ``list_days`` calendar days before its last trading day until that day, at
+    ``spot * exp(annual_carry * years_to_expiry)``, so rolls have a known carry
+    gap. Columns match ``gcsi.data.load_bars``: ts_event, instrument_id,
+    symbol, expiration, open, high, low, close, volume. Use with
+    ``cointegrated_prices(...).prices["GC"]`` and ``["SI"]`` for a full
+    synthetic pipeline run.
+    """
+    from gcsi import contracts  # local import: synthetic must not depend on it at import time
+
+    idx = spot.index
+    base_id = base_id if base_id is not None else (_FIRST_ID.get(root, 9000) * 10)
+    start, end = idx.min().tz_convert(None), idx.max().tz_convert(None)
+    frames = []
+    for k, (y, m) in enumerate(contracts.active_contracts(root, start, end)):
+        expiry = contracts.last_trading_day(y, m).tz_localize("UTC")
+        alive = (idx <= expiry) & (idx >= expiry - pd.Timedelta(days=list_days))
+        if not alive.any():
+            continue
+        years = (expiry - idx[alive]).days / 365.25
+        close = _round_to_tick(spot[alive].to_numpy() * np.exp(annual_carry * years),
+                               contracts.get_spec(root).tick_size)
+        frames.append(pd.DataFrame({
+            "ts_event": idx[alive], "instrument_id": base_id + k,
+            "symbol": contracts.contract_symbol(root, y, m), "expiration": expiry,
+            "open": close, "high": close, "low": close, "close": close, "volume": 1000}))
+    return pd.concat(frames, ignore_index=True).sort_values(["ts_event", "instrument_id"],
+                                                            ignore_index=True)
