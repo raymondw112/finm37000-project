@@ -2,7 +2,7 @@
 
 [![tests](https://github.com/ryotahidaka/finm37000-project/actions/workflows/tests.yml/badge.svg)](https://github.com/ryotahidaka/finm37000-project/actions/workflows/tests.yml)
 
-> **Status: Part 3 (building the pipeline).** Scope narrowed to the daily strategy after the professor's review on 18 Oct; see [Future work](#future-work). Run instructions become final once ingestion (#4) lands.
+> **Status: complete.** One command pulls the data, runs the analysis and both backtests, and writes the report (see [Running the project](#running-the-project) and [Results](#results)). Scope is the daily strategy, after the professor's review on 18 Oct; see [Future work](#future-work).
 
 ## Team
 
@@ -19,13 +19,13 @@ Team communication channel: **WhatsApp**
 
 #### Q) State the question or application, the CME market(s), and the expected output.
 
-A) We study pairs trading on CME precious metals futures using Databento futures data and analyze the trading feasibility with proper backtesting.**
+A) Can a daily mean-reversion trade on the gold-silver spread make money after costs? We trade the spread log GC − α − β·log SI on COMEX gold (GC) and silver (SI) futures, sized beta-neutral with micros (MGC, SIL), using Databento daily bars for every contract since 2010. The output is an out-of-sample, cost-aware backtest with a report: Sharpe, drawdown, PnL attribution and the four stress windows.
 
 ### Motivation
 
 #### Q) Why is this interesting? What market-structure feature or trading idea does it explore?
 
-A) At the times of inflation and market turmoil, investor prefer safe assets in the form of precious metals. Gold and Silver have seen a huge return in the recent past. However, when positioning in the precious metals, one has to understand the volatility of the asset and balance between these assets. We plan to analyse and come up with a strategy that tries to lever or de-lever out of these positions based on market movements.
+A) Gold and silver respond to the same drivers (real rates, the dollar, risk appetite), but silver also has an industrial leg, so the two drift apart and come back. Doing this properly on futures exercises the market-structure side of the course: per-contract data, roll schedules before first notice, ratio-adjusted series for signals vs actual prices for PnL, contract multipliers and micros for sizing, and tick-based costs.
 
 ### Scope
 
@@ -62,7 +62,7 @@ By the end of the project, a user can run a single documented workflow that:
 
 #### Q) Describe the final deliverable and the headline results we expect to show.
 
-A) Precious metal investment strategy with levering/de-levering out of positions to get maximum returns and low drawdown.
+A) `python -m gcsi.report` produces `output/databento/report.md` with: the cointegration evidence (full sample and year by year), the OU half-life, a baseline backtest with pre-committed parameters, a walk-forward out-of-sample backtest after costs, PnL attribution (spread, whole-contract sizing, trade costs, roll costs), sensitivities, and the stress windows. Headline numbers are in [Results](#results).
 
 
 ## Course Logistics
@@ -76,7 +76,7 @@ Data comes from [Databento](https://databento.com/) under the course's CME licen
   export DATABENTO_API_KEY="your-key-here"
   ```
 - Raw downloads are cached under `data/` (git-ignored) so the same request isn't billed or downloaded twice.
-- **Additional data sources:** TODO (none planned yet). If added, document how to obtain them and how to run without them.
+- **Additional data sources:** none. Without a key, `python -m gcsi.report --source synthetic` runs the whole pipeline on synthetic data with a known answer.
 
 ### Getting Started
 
@@ -107,11 +107,32 @@ python -m gcsi.data --start 2010-06-06 --end YYYY-MM-DD  # pulls, validates, cac
 #    Refuses to pull if the estimate is above --max-cost (default $5) unless you add --yes.
 #    A second run is served from the cache and makes no requests.
 
-# 2. Run the analysis / strategy
-python -m gcsi.run                                        # TODO
+# 2. Run everything: continuous series, cointegration and OU, baseline + walk-forward
+#    backtests, sensitivities, stress windows, figures (uses the cache from step 1)
+python -m gcsi.report --source databento --start 2010-06-06
 
-# 3. Results are written to output/
+# 3. Read output/databento/report.md (tables + fig_*.png next to it)
+
+# No key? The same pipeline on synthetic data with a known answer (beta 0.8, half-life 13.9 days):
+python -m gcsi.report --source synthetic
 ```
+
+### Results
+
+<!-- RESULTS -->
+Real-data results are written by `python -m gcsi.report --source databento` to `output/databento/report.md`; the summary goes here once the team's run is in.
+
+Pipeline check on synthetic data (`--source synthetic`, 16 years, true β 0.8, half-life 13.9 days): the walk-forward backtest earns a Sharpe of 1.15 after costs (12.7% a year on $1m gold notional, max drawdown −10%), and a control with no mean reversion loses money. That shows the plumbing works; it says nothing about the market.
+<!-- /RESULTS -->
+
+How the backtest works (details in `src/gcsi/backtest.py`):
+
+- Hedge ratio from a trailing 1-year OLS of log GC on log SI, shifted one day (Kalman filter as a sensitivity run).
+- z-score of the spread with the past 60 days re-priced at today's β; enter at |z| ≥ 2, exit at 0, stop at |z| ≥ 4.
+- $1m gold notional, silver sized at β × that in dollars, standard contracts plus micros for the remainder.
+- Orders fill one day after the signal at the raw close; rolls 5 business days before first notice, charged as two trades.
+- Costs per contract per side: half a tick + COMEX fee + commission (GC $7.50, MGC $1.45, SI $15.00, SIL $3.45; `src/gcsi/costs.py`).
+- Walk-forward: each year trades the (entry, z lookback) with the best Sharpe on the previous 3 years.
 
 ### Running the tests
 
@@ -131,7 +152,8 @@ finm37000-project/
 ├── requirements.txt        # pinned full environment
 ├── .env.example            # copy to .env and add your Databento key
 ├── docs/DESIGN.md          # pipeline, components, design decisions
-├── src/gcsi/               # pipeline code: data, rolls, cointegration, ou, signals, backtest, metrics
+├── src/gcsi/               # pipeline: contracts, data, rolls, cointegration, ou, signals,
+│                           #   costs, ledger, backtest, metrics, report (+ synthetic for tests)
 ├── notebooks/              # exploration and presentation only
 ├── tests/
 ├── data/                   # cached Databento data (git-ignored)
@@ -149,7 +171,7 @@ The work is tracked in the [GitHub Issues](../../issues). Each issue maps to a s
 | Part 1 | Lecture 2 | Repo, README, and Issues agreed by all members |
 | Part 2 | Lecture 3 | Environment, test fixtures, contract specs, continuous series (#3, #14, #18, #5) |
 | Part 3 | Lecture 4 | Ingestion, CI, cointegration and OU, signals, backtest skeleton (#4, #23, #7, #8, #9, #10) |
-| Part 4 | Lecture 5 | Cost model, PnL ledger, full backtest, EDA, evaluation (#24, #25, #10, #6, #11) |
+| Part 4 | Lecture 5 | Cost model, PnL ledger, full backtest, EDA, evaluation (#24, #25, #10, #6, #11): done |
 | Completion | Final | README with exact run commands, results and presentation (#13) |
 
 ### Contributing / Workflow
@@ -172,4 +194,8 @@ Moved out of scope after the professor's review on 18 Oct, which noted the proje
 ### References
 
 - [Databento documentation](https://databento.com/docs)
-- TODO: papers or prior work relevant to the chosen topic
+- Engle, R. and Granger, C. (1987), Co-integration and error correction, *Econometrica* 55(2)
+- Gatev, E., Goetzmann, W. and Rouwenhorst, K. G. (2006), Pairs trading: performance of a relative-value arbitrage rule, *Review of Financial Studies* 19(3)
+- Vidyamurthy, G. (2004), *Pairs Trading: Quantitative Methods and Analysis*, Wiley
+- [CME Group gold and silver contract specifications](https://www.cmegroup.com/markets/metals/precious/gold.contractSpecs.html)
+- [COMEX fee pass-through schedule (Interactive Brokers)](https://brokerage.ibkr.com/en/accounts/fees/COMEX.php)
