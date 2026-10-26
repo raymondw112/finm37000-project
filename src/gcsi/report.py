@@ -43,12 +43,26 @@ DEFAULT_OUT = ROOT_DIR / "output"
 # --------------------------------------------------------------------------- #
 # Data
 # --------------------------------------------------------------------------- #
-def load_databento(start: str, end: str | None, yes: bool, cache_dir: Path | None = None) -> dict:
+class _CacheOnly:
+    """Stand-in Databento client for --cache-only: anything not cached is an error, never a pull."""
+
+    metadata = None
+
+    @property
+    def timeseries(self):
+        raise RuntimeError("Data not in the cache for this window. Run `python -m gcsi.data` "
+                           "first, or pass an --end on or before the cached end date.")
+
+
+def load_databento(start: str, end: str | None, yes: bool, cache_dir: Path | None = None,
+                   cache_only: bool = False) -> dict:
     from gcsi import data
     end = end or pd.Timestamp.now(tz="UTC").normalize().strftime("%Y-%m-%d")
     kw = {"yes": yes}
     if cache_dir is not None:
         kw["cache_dir"] = cache_dir
+    if cache_only:
+        kw.update(client=_CacheOnly(), max_cost=None)
     return {root: data.load_bars(root, start, end, **kw) for root in ("GC", "SI")}
 
 
@@ -62,12 +76,22 @@ def load_synthetic(years: int = 16, seed: int = 7, start: str = "2010-06-07") ->
     return bars
 
 
+def drop_weekends(bars: pd.DataFrame) -> pd.DataFrame:
+    """Remove Saturday/Sunday bars.
+
+    Globex reopens on Sunday evening, so a daily bar keyed by UTC date can show
+    a short Sunday session. It is a few hours of thin trading, not a trading day.
+    """
+    return bars[bars["ts_event"].dt.dayofweek < 5]
+
+
 def continuous(bars: dict, days_before_fnd: int = 5):
     legs, logs, n_rolls = {}, {}, {}
     for root in ("GC", "SI"):
-        sched = rolls.roll_schedule(bars[root], root, rule="fnd", days_before_fnd=days_before_fnd)
-        legs[root] = rolls.build_continuous(bars[root], root, adjustment="ratio", schedule=sched)
-        logs[root] = rolls.roll_log(bars[root], sched)
+        b = drop_weekends(bars[root])
+        sched = rolls.roll_schedule(b, root, rule="fnd", days_before_fnd=days_before_fnd)
+        legs[root] = rolls.build_continuous(b, root, adjustment="ratio", schedule=sched)
+        logs[root] = rolls.roll_log(b, sched)
         n_rolls[root] = int(len(logs[root]))
     return legs["GC"], legs["SI"], logs, n_rolls
 
@@ -227,7 +251,7 @@ def figures(gc, si, res: dict, out_dir: Path) -> list[str]:
         ax.axvspan(pd.Timestamp(a, tz="UTC"), pd.Timestamp(b, tz="UTC"), color=gold, alpha=0.10)
     ax.set_ylabel("cumulative PnL ($k)")
     ax.set_title(f"Cumulative PnL on ${cap/1e6:.0f}m gold notional (shaded: stress windows)")
-    ax.legend(loc="upper left"); fig.tight_layout(); fig.savefig(out_dir / "fig_equity.png"); plt.close(fig)
+    ax.legend(loc="lower left", fontsize=8); fig.tight_layout(); fig.savefig(out_dir / "fig_equity.png"); plt.close(fig)
     files.append("fig_equity.png")
 
     fig, ax = plt.subplots(figsize=(10, 2.8))
@@ -309,9 +333,8 @@ def write_report(source: str, e: dict, yearly: pd.DataFrame, res: dict, n_rolls:
         "## Baseline: pre-committed parameters, full history after warm-up", "",
         f"Sharpe {_num(bs['sharpe'])}, annual return {_pct(bs['ann_return'])}, max drawdown "
         f"{_pct(bs['max_drawdown'])}, {bt['n_trades']} round trips, average holding "
-        f"{_num(bt['avg_holding_days'], 1)} days. Costs were "
-        f"{_pct(bl['attribution']['trade_costs'] / bl['attribution']['gross_pnl'] + bl['attribution']['roll_costs'] / bl['attribution']['gross_pnl']) if bl['attribution']['gross_pnl'] > 0 else 'n/a'} "
-        "of gross PnL.", "",
+        f"{_num(bt['avg_holding_days'], 1)} days. Costs: trades {_usd(bl['attribution']['trade_costs'])}, "
+        f"rolls {_usd(bl['attribution']['roll_costs'])}, against gross PnL {_usd(bl['attribution']['gross_pnl'])}.", "",
         "## Is the pair cointegrated?", "",
         f"Full sample Engle-Granger: beta {_num(e['eg_beta'], 3)}, p-value {_num(e['eg_pvalue'], 4)} "
         f"(t {_num(e['eg_tstat'])} vs 5% critical {_num(e['eg_crit_5pct'])}). Johansen rank "
@@ -350,7 +373,7 @@ def write_report(source: str, e: dict, yearly: pd.DataFrame, res: dict, n_rolls:
               f"{base.fill_lag} day after the signal at the raw close. Cost per contract per side (USD): "
               + ", ".join(f"{k} {v:.2f}" for k, v in cost_model.table().items())
               + " (half a tick + exchange fee + commission; see gcsi/costs.py).", "",
-              "Figures: " + ", ".join(figs)]
+              "## Figures", ""] + [f"![{f[4:-4]}]({f})" for f in figs]
     (out_dir / "report.md").write_text("\n".join(lines) + "\n")
     return results
 
@@ -362,6 +385,8 @@ def main(argv: list[str] | None = None) -> dict:
     p.add_argument("--end", default=None)
     p.add_argument("--yes", action="store_true", help="allow Databento pulls above the cost cap")
     p.add_argument("--cache-dir", type=Path, default=None)
+    p.add_argument("--cache-only", action="store_true",
+                   help="read only the local cache; never call Databento (no key needed)")
     p.add_argument("--out", type=Path, default=DEFAULT_OUT)
     p.add_argument("--train-years", type=int, default=3)
     args = p.parse_args(argv)
@@ -370,7 +395,8 @@ def main(argv: list[str] | None = None) -> dict:
         bars = load_synthetic()
         truth = bars.pop("truth")
     else:
-        bars, truth = load_databento(args.start, args.end, args.yes, args.cache_dir), None
+        bars = load_databento(args.start, args.end, args.yes, args.cache_dir, args.cache_only)
+        truth = None
     out_dir = args.out / args.source
     out_dir.mkdir(parents=True, exist_ok=True)
     print("Building continuous series ...")

@@ -41,3 +41,15 @@ def test_chain_generator_matches_load_bars_columns():
     assert list(bars.columns) == ["ts_event", "instrument_id", "symbol", "expiration",
                                   "open", "high", "low", "close", "volume"]
     assert bars.groupby("symbol")["instrument_id"].nunique().eq(1).all()
+
+
+def test_cache_only_never_calls_databento(tmp_path):
+    with pytest.raises(RuntimeError, match="not in the cache"):
+        report.load_databento("2024-01-01", "2024-03-01", False, tmp_path, cache_only=True)
+
+
+def test_weekend_bars_dropped():
+    import pandas as pd
+    b = pd.DataFrame({"ts_event": pd.to_datetime(["2025-01-03", "2025-01-05", "2025-01-06"], utc=True),
+                      "close": [1.0, 2.0, 3.0]})
+    assert list(report.drop_weekends(b)["close"]) == [1.0, 3.0]   # Sunday 5 Jan removed
