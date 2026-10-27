@@ -1,220 +1,124 @@
-# finm37000-project
+# Gold vs. silver pairs trading on CME futures: a cost-aware backtest
 
 [![tests](https://github.com/ryotahidaka/finm37000-project/actions/workflows/tests.yml/badge.svg)](https://github.com/ryotahidaka/finm37000-project/actions/workflows/tests.yml)
 
-> **Status: complete.** One command pulls the data, runs the analysis and both backtests, and writes the report (see [Running the project](#running-the-project) and [Results](#results)). Scope is the daily strategy, after the professor's review on 18 Oct; see [Future work](#future-work).
+**Bottom line: a daily mean-reversion trade on the gold/silver spread loses money out of sample, and the cause is the pair, not trading costs.**
 
-## Team
+We built a reproducible pipeline that downloads every COMEX gold (GC) and silver (SI) futures contract from Databento (`GLBX.MDP3`, June 2010 to October 2026), rolls contracts before first notice, tests for cointegration, and backtests a z-score spread strategy with realistic costs, micro contracts and walk-forward parameter selection. One command reproduces every number below. On synthetic data where the spread truly mean-reverts, the same code makes money, so the negative result reflects the market rather than a bug.
 
-| Member | GitHub | Part 1 role |
+## Headline results
+
+Out of sample, after costs, $1m gold notional, 4,248 trading days with both legs, 81 gold and 82 silver rolls:
+
+| | Walk-forward, 2015 to 2026 | Baseline, 2011 to 2026 (fixed parameters) |
 | --- | --- | --- |
-| Ryota Hidaka | ryotahidaka | Tech leader (owns this repo) |
-| Abinaya Ankur Raut | kira7688 | Communication leader (README) |
-| Konark Gupta | konark20 | Design leader (Issues) |
-| Raymond Wang | raymondw112 | Design leader (Issues) |
+| Sharpe | -0.85 | -0.21 |
+| Annual return | -6.8% | -1.7% |
+| Max drawdown | -85.7% | -47.6% |
+| Round trips (per year) | 43 (3.5) | 72 (4.5) |
+| Win rate | 37% | 58% |
+| Total PnL | -$830k | -$267k |
+| Trading + roll costs | $23k | $31k |
 
-Team communication channel: **WhatsApp**
+![Cumulative PnL of the baseline and walk-forward backtests](docs/results/fig_equity.png)
 
-## Project Summary
+## What we found
 
-#### Q) State the question or application, the CME market(s), and the expected output.
+**1. Gold and silver are correlated but not cointegrated.** Daily returns have a correlation of 0.79, yet the full-sample Engle-Granger test gives a p-value of 0.87 (t-statistic -1.15 against a 5% critical value of -3.34), and the Johansen test finds no cointegrating relation. Tested one year at a time, the pair is cointegrated at 5% in only 2 of 17 years (2014 and 2015), and the yearly hedge ratio ranges from 0.15 to 0.79.
 
-A) Can a daily mean-reversion trade on the gold-silver spread make money after costs? We trade the spread log GC − α − β·log SI on COMEX gold (GC) and silver (SI) futures, sized beta-neutral with micros (MGC, SIL), using Databento daily bars for every contract since 2010. The output is an out-of-sample, cost-aware backtest with a report: Sharpe, drawdown, PnL attribution and the four stress windows.
+**2. Mean reversion exists only on short windows.** Fitting an Ornstein-Uhlenbeck process to the spread gives a half-life of 12 to 14 trading days on the last 6 to 12 months, 37 days on 2 years, 98 days on 4 years and 940 days on the full sample. A strategy assuming a stable mean keeps betting on reversions that arrive years later, if at all.
 
-### Motivation
+**3. The gold/silver ratio trends for years.** It fell to 32 in 2011, peaked at 122 in March 2020, and dropped below 50 in early 2026 (chart: `docs/results/fig_prices_ratio.png`). The worst out-of-sample years are 2025 (-34%) and 2020 (-17%), when the spread kept moving away from its mean.
 
-#### Q) Why is this interesting? What market-structure feature or trading idea does it explore?
+**4. Costs are not the problem.** Out of sample, trading and roll costs total about $23k against a gross loss of $807k. In the baseline, doubling every cost only moves the Sharpe from -0.21 to -0.24.
 
-A) Gold and silver respond to the same drivers (real rates, the dollar, risk appetite), but silver also has an industrial leg, so the two drift apart and come back. Doing this properly on futures exercises the market-structure side of the course: per-contract data, roll schedules before first notice, ratio-adjusted series for signals vs actual prices for PnL, contract multipliers and micros for sizing, and tick-based costs.
+**5. No variation rescues the trade.** Every variant keeps the baseline parameters:
 
-### Scope
+| Variant | Sharpe | Annual return | Max drawdown |
+| --- | --- | --- | --- |
+| Baseline | -0.21 | -1.7% | -47.6% |
+| No costs | -0.19 | -1.5% | -45.4% |
+| Fill at the signal close instead of the next day | -0.23 | -1.8% | -49.8% |
+| Kalman-filter hedge ratio | -0.10 | -0.8% | -36.7% |
+| No micro contracts | -0.19 | -1.5% | -45.6% |
+| Dollar-neutral instead of beta-neutral | 0.15 | 2.0% | -32.8% |
 
-- **Market(s):** COMEX precious-metals futures: Gold (GC) and Silver (SI), with Micro Gold (MGC) and Micro Silver (SIL) for sizing
-- **Frequency:** daily signals on daily closes
-- **Date range:** 2010-06-06 (start of `GLBX.MDP3`) to today; stress windows Aug-Dec 2011, Apr 2013, Mar 2020, 2022 (#19)
-- **Databento dataset and schema:** `GLBX.MDP3` (CME Globex). Schemas: `definition` and `ohlcv-1d` for every GC and SI contract via parent symbology (`GC.FUT`, `SI.FUT`); optionally `statistics` for settlement and open interest
-- **Out of scope:** intraday execution analysis, execution simulation and a copula signal (see [Future work](#future-work)). A Brent/WTI mean-reverting strategy is not permitted for this course.
+Dollar-neutral sizing is the only positive variant, too weak and unrelated to the cointegration hypothesis to count as an edge.
 
-### How it works
+**6. Tuning on the past does not help.** Each year the walk-forward picks the entry threshold and z-score lookback with the best Sharpe over the previous three years. Those settings did not carry over, and the walk-forward does worse than the fixed baseline.
 
-```mermaid
-flowchart LR
-    K["Your Databento key"] --> D["Ingestion #4<br/>definition + ohlcv-1d<br/>cost check, cache"]
-    D --> R["Continuous series #5<br/>roll before first notice"]
-    R -->|ratio-adjusted closes| S["Statistics #7 #8<br/>cointegration, hedge ratio,<br/>OU half-life"]
-    S --> G["Signals #9<br/>z-score entry/exit,<br/>contracts per leg"]
-    R -->|actual prices + roll log| B
-    G --> B["Walk-forward backtest #10<br/>costs #24, PnL ledger #25"]
-    B --> M["Evaluation #11<br/>Sharpe, drawdown,<br/>stress windows"]
-    M --> O["output/<br/>tables + figures"]
-```
+Stress windows (baseline): -$169k in March 2020, -$50k in August to December 2011, -$47k in 2022, +$12k in April 2013.
 
-Signals use the ratio-adjusted series so roll gaps never look like price moves; PnL uses actual prices of the contract held that day, with each roll charged explicitly.
+## How it works
 
-### Desired Outcome
+1. **Data** (`gcsi.data`): `definition` and `ohlcv-1d` for every GC and SI contract, with a cost check and a local cache.
+2. **Continuous series** (`gcsi.rolls`): each leg rolls 5 business days before first notice. Signals use ratio-adjusted prices so roll gaps never look like moves; PnL uses the contract actually held, with each roll charged as two trades.
+3. **Statistics** (`gcsi.cointegration`, `gcsi.ou`): Engle-Granger and Johansen tests, rolling and Kalman hedge ratios, OU half-life, no look-ahead.
+4. **Signals** (`gcsi.signals`): the spread is log GC minus α minus β times log SI, with β from a trailing one-year OLS shifted one day. The z-score uses the past 60 days re-priced at today's β. Enter at |z| ≥ 2, exit at 0, stop at |z| ≥ 4.
+5. **Backtest** (`gcsi.backtest`, `gcsi.costs`, `gcsi.ledger`): $1m of gold, silver sized at β times that in dollars, with micros (MGC, SIL) for the remainder. Orders fill at the next day's close. Costs per contract per side are half a tick plus exchange fee plus commission (GC $7.50, MGC $1.45, SI $15.00, SIL $3.45). The ledger attributes PnL to spread, sizing, trades and rolls.
+6. **Report** (`gcsi.metrics`, `gcsi.report`): performance metrics, stress windows, sensitivities and figures.
 
-By the end of the project, a user can run a single documented workflow that:
+**Pipeline check:** on 16 years of synthetic data with a known hedge ratio of 0.8 and a half-life of 13.9 days (`--source synthetic`), the walk-forward earns a Sharpe of 1.15 after costs.
 
-1. downloads (or loads cached) Databento CME data,
-2. cleans and transforms it,
-3. runs the analysis, simulation, or strategy, and
-4. writes results (tables, figures, a summary) to an output folder.
+## Limitations and next steps
 
-#### Q) Describe the final deliverable and the headline results we expect to show.
+The backtest trades daily closes with a one-day delay and does not model intraday execution. Next steps: a regime filter that trades only while a trailing cointegration test passes, settlement-price fills from the `statistics` schema, and an intraday study of working the spread as one order. Earlier scope, roles and the roadmap are in [docs/PLANNING.md](docs/PLANNING.md); the component design is in [docs/DESIGN.md](docs/DESIGN.md).
 
-A) `python -m gcsi.report` produces `output/databento/report.md` with: the cointegration evidence (full sample and year by year), the OU half-life, a baseline backtest with pre-committed parameters, a walk-forward out-of-sample backtest after costs, PnL attribution (spread, whole-contract sizing, trade costs, roll costs), sensitivities, and the stress windows. Headline numbers are in [Results](#results).
+## Running the project
 
-
-## Course Logistics
-
-### Data
-
-Data comes from [Databento](https://databento.com/) under the course's CME license.
-
-- A Databento API key is required. Set it as an environment variable; never commit it.
-  ```bash
-  export DATABENTO_API_KEY="your-key-here"
-  ```
-- Raw downloads are cached under `data/` (git-ignored) so the same request isn't billed or downloaded twice.
-- **Additional data sources:** none. Without a key, `python -m gcsi.report --source synthetic` runs the whole pipeline on synthetic data with a known answer.
-
-### Getting Started
-
-**Requirements:** Python 3.12, git, a Databento API key.
+**Requirements:** Python 3.12, git and a Databento API key with CME access.
 
 ```bash
 git clone https://github.com/ryotahidaka/finm37000-project.git
 cd finm37000-project
-
 python3.12 -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt   # pinned versions; also installs src/gcsi in editable mode
+source .venv/bin/activate            # Windows: .venv\Scripts\activate
+pip install -r requirements.txt      # pinned versions; installs src/gcsi in editable mode
 
-cp .env.example .env              # then paste your key into .env (git-ignored)
-pytest                            # import smoke test; should pass on a fresh clone
+cp .env.example .env                 # paste your key into .env (git-ignored)
+pytest                               # Databento tests are skipped unless you run pytest -m db
 ```
 
-The key is read from the `DATABENTO_API_KEY` environment variable: export it as above, or put it in `.env`. If neither is set, `gcsi.data` falls back to the course helper `finm37000.get_databento_api_key()`, which reads `~/.databento_api_key`.
-
-`requirements.txt` pins every package, including the course `finm37000` package at a fixed commit. Direct dependencies are declared in `pyproject.toml`. Use `pip install -e ".[dev]"` instead if you only want the latest compatible versions.
-
-### Running the project
+The key is read from the `DATABENTO_API_KEY` environment variable or `.env`. If neither is set, the course helper `finm37000.get_databento_api_key()` reads `~/.databento_api_key`.
 
 ```bash
-# 1. Fetch and cache data (GC and SI daily bars, every contract, from the dataset start)
-python -m gcsi.data --cost-only                          # free: prints the estimated cost
-python -m gcsi.data --start 2010-06-06 --end YYYY-MM-DD  # pulls, validates, caches under data/databento/
-#    Refuses to pull if the estimate is above --max-cost (default $5) unless you add --yes.
-#    A second run is served from the cache and makes no requests.
+# 1. Download and cache GC and SI daily bars (every contract since the dataset start)
+python -m gcsi.data --cost-only                 # free: prints the estimated cost
+python -m gcsi.data --start 2010-06-06          # pulls, validates and caches under data/databento/
+#    Refuses to pull above --max-cost (default $5) unless you add --yes.
 
-# 2. Run everything: continuous series, cointegration and OU, baseline + walk-forward
-#    backtests, sensitivities, stress windows, figures (uses the cache from step 1)
+# 2. Run everything: continuous series, statistics, both backtests, sensitivities, figures
 python -m gcsi.report --source databento --start 2010-06-06
-#    (add --cache-only to never call Databento and read only data/databento/)
+#    --end YYYY-MM-DD (exclusive) fixes the last date; --end 2026-10-24 uses the same
+#    window as the committed results. --cache-only reads data/databento/ and never calls Databento.
 
-# 3. Read output/databento/report.md (tables + fig_*.png next to it)
+# 3. Results: output/databento/report.md, plus results.json, CSV tables and fig_*.png
 
-# No key? The same pipeline on synthetic data with a known answer (beta 0.8, half-life 13.9 days):
-python -m gcsi.report --source synthetic
+# No key? The whole pipeline on synthetic data with a known answer:
+python -m gcsi.report --source synthetic        # writes output/synthetic/
 ```
 
-### Results
+`output/` is git-ignored. The results quoted above are a committed copy of one run, in [docs/results/](docs/results/report.md).
 
-<!-- RESULTS -->
-Real data: Databento GLBX.MDP3, 7 Jun 2010 to 23 Oct 2026, 4,248 days with both legs, 81 gold and 82 silver rolls. Full report: [docs/results/report.md](docs/results/report.md), regenerated by `python -m gcsi.report`.
-
-The strategy does not make money, and the reason is the pair, not the costs.
-
-| Out of sample, after costs | Walk-forward 2015-2026 | Baseline 2011-2026 (fixed parameters) |
-| --- | --- | --- |
-| Sharpe | -0.85 | -0.21 |
-| Annual return on $1m gold notional | -6.8% | -1.7% |
-| Max drawdown | -86% | -48% |
-| Round trips (per year) | 43 (3.5) | 72 (4.5) |
-| Win rate | 37% | 58% |
-
-- **Not cointegrated over 2010-2026.** Engle-Granger p-value 0.87, Johansen rank 0. Single years pass the 5% test only twice (2014, 2015).
-- **Mean reversion lives on short windows only.** The half-life of the spread is 12-14 trading days fitted on the last 6-12 months, but 940 days on the full sample.
-- **Long trends do the damage.** The gold/silver ratio went from 32 (Apr 2011) to 122 (Mar 2020) and down to 46 (Jan 2026). The big losses are 2020 and 2025, when the spread trended through the stop.
-- **Costs are small.** About $31k of trading and roll costs over 16 years, against a gross loss of $236k before costs.
-- **No variant rescues it.** Same-close fills, a Kalman hedge ratio and no micros all stay negative. Dollar-neutral sizing is slightly positive (Sharpe 0.15), which is not evidence of an edge.
-
-Pipeline check on synthetic data (`--source synthetic`, 16 years, true β 0.8, half-life 13.9 days): the same code earns a walk-forward Sharpe of 1.15 after costs, and a control with no mean reversion loses money. So the negative real result is about the market, not the plumbing.
-<!-- /RESULTS -->
-
-How the backtest works (details in `src/gcsi/backtest.py`):
-
-- Hedge ratio from a trailing 1-year OLS of log GC on log SI, shifted one day (Kalman filter as a sensitivity run).
-- z-score of the spread with the past 60 days re-priced at today's β; enter at |z| ≥ 2, exit at 0, stop at |z| ≥ 4.
-- $1m gold notional, silver sized at β × that in dollars, standard contracts plus micros for the remainder.
-- Orders fill one day after the signal at the raw close; rolls 5 business days before first notice, charged as two trades.
-- Costs per contract per side: half a tick + COMEX fee + commission (GC $7.50, MGC $1.45, SI $15.00, SIL $3.45; `src/gcsi/costs.py`).
-- Walk-forward: each year trades the (entry, z lookback) with the best Sharpe on the previous 3 years.
-
-### Running the tests
-
-```bash
-pytest            # skips tests marked `db` (they need Databento access)
-pytest -m db      # run only the Databento tests
-```
-
-GitHub Actions ([.github/workflows/tests.yml](.github/workflows/tests.yml)) runs `pytest -q` on Python 3.12, on Linux and Windows, for every pull request to `main` and every push to `main`. It uses no secrets, so `db` tests are always skipped there.
-
-### Repository Layout
+## Repository layout
 
 ```
-finm37000-project/
-├── README.md
-├── pyproject.toml          # package metadata + direct dependencies
-├── requirements.txt        # pinned full environment
-├── .env.example            # copy to .env and add your Databento key
-├── docs/DESIGN.md          # pipeline, components, design decisions
-├── src/gcsi/               # pipeline: contracts, data, rolls, cointegration, ou, signals,
-│                           #   costs, ledger, backtest, metrics, report (+ synthetic for tests)
-├── notebooks/              # exploration and presentation only
-├── tests/
-├── data/                   # cached Databento data (git-ignored)
-└── output/                 # generated tables and figures (git-ignored)
+src/gcsi/        contracts, data, rolls, cointegration, ou, signals, costs, ledger,
+                 backtest, metrics, report (+ synthetic data for tests)
+tests/           pytest suite; GitHub Actions runs it on Linux and Windows
+docs/results/    committed results: report.md, results.json, CSV tables, figures
+docs/DESIGN.md   pipeline and design decisions
+docs/PLANNING.md original planning README (scope, roles, roadmap)
+data/, output/   Databento cache and generated results (git-ignored)
 ```
 
-See [docs/DESIGN.md](docs/DESIGN.md) for how the components fit together.
+## Team
 
-### Roadmap
+Group 13, FINM 37000, University of Chicago, autumn 2026: Ryota Hidaka, Abinaya Ankur Raut, Konark Gupta, Raymond Wang.
 
-The work is tracked in the [GitHub Issues](../../issues). Each issue maps to a step in the workflow above.
+## References
 
-| Milestone | Course due | Goal |
-| --- | --- | --- |
-| Part 1 | Lecture 2 | Repo, README, and Issues agreed by all members |
-| Part 2 | Lecture 3 | Environment, test fixtures, contract specs, continuous series (#3, #14, #18, #5) |
-| Part 3 | Lecture 4 | Ingestion, CI, cointegration and OU, signals, backtest skeleton (#4, #23, #7, #8, #9, #10) |
-| Part 4 | Lecture 5 | Cost model, PnL ledger, full backtest, EDA, evaluation (#24, #25, #10, #6, #11): done |
-| Completion | Final | README with exact run commands, results and presentation (#13) |
-
-### Contributing / Workflow
-
-1. Fork the main repo (owned by the Tech leader) and clone your fork.
-2. Create a branch per issue (`git checkout -b issue-<n>-short-name`).
-3. Open a Pull Request to the main repo that references the issue (`Closes #<n>`).
-4. At least one other team member reviews; the Tech leader merges.
-5. Discuss scope changes in the relevant Issue, not offline.
-
-### Future work
-
-Moved out of scope after the professor's review on 18 Oct, which noted the project had two focal points (long-term continuous adjustment and trade-level execution) that could each be a project on their own. Details in [docs/DESIGN.md](docs/DESIGN.md#8-future-work).
-
-- Execution layer: leg the spread on the harder-to-fill side, route across GC/MGC and SI/SIL (was #26)
-- Execution simulator on intraday top-of-book (was #27)
-- Copula signal as a second strategy (was #12)
-- Cross-exchange routing (COMEX vs another venue)
-- Regime filter: trade only while a trailing cointegration test passes (the real-data results show the relationship holds in some years only)
-- Settlement prices and open interest (`statistics` schema), so fills can be modelled at settlement or via Trading at Settlement instead of a one-day lag
-
-### References
-
-- [Databento documentation](https://databento.com/docs)
 - Engle, R. and Granger, C. (1987), Co-integration and error correction, *Econometrica* 55(2)
 - Gatev, E., Goetzmann, W. and Rouwenhorst, K. G. (2006), Pairs trading: performance of a relative-value arbitrage rule, *Review of Financial Studies* 19(3)
 - Vidyamurthy, G. (2004), *Pairs Trading: Quantitative Methods and Analysis*, Wiley
-- [CME Group gold and silver contract specifications](https://www.cmegroup.com/markets/metals/precious/gold.contractSpecs.html)
-- [COMEX fee pass-through schedule (Interactive Brokers)](https://brokerage.ibkr.com/en/accounts/fees/COMEX.php)
+- [Databento documentation](https://databento.com/docs) and [CME gold and silver contract specifications](https://www.cmegroup.com/markets/metals/precious/gold.contractSpecs.html)
